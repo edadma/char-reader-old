@@ -6,23 +6,58 @@ import scala.collection.mutable.ListBuffer
 
 object CharReader {
 
-  val EOI = '\u001A'
-  val INDENT = '\uE000'
-  val DEDENT = '\uE001'
-
-  def fromString(s: String, tabs: Int = 4, indentation: Boolean = false) = new CharReader(s.iterator, tabs, indentation)
-
-  def fromInputStream(s: InputStream, enc: String, tabs: Int = 4, indentation: Boolean = false): CharReader =
-    fromInputStream(s, tabs, indentation)(io.Codec(enc))
+  def fromString(s: String, tabs: Int = 4, indentation: Boolean = false) =
+    new LazyListCharReader(s.iterator, tabs, indentation)
 
   def fromInputStream(s: InputStream, tabs: Int = 4, indentation: Boolean = false)(
       implicit codec: io.Codec): CharReader =
     fromSource(io.Source.fromInputStream(s)(codec), tabs, indentation)
 
-  def fromSource(s: io.Source, tabs: Int = 4, indentation: Boolean = false) = new CharReader(s, tabs, indentation)
+  def fromSource(s: io.Source, tabs: Int = 4, indentation: Boolean = false) =
+    new LazyListCharReader(s, tabs, indentation)
 
   def fromFile(file: String, tabs: Int = 4, indentation: Boolean = false)(implicit codec: io.Codec): CharReader =
     fromInputStream(new FileInputStream(file), tabs, indentation)
+
+}
+
+abstract class CharReader {
+  def line: Int
+
+  def col: Int
+
+  def more: Boolean
+
+  def eoi: Boolean
+
+  def next: CharReader
+
+  def raw: CharReader
+
+  def ch: Char
+}
+
+class SpecialCharReader(val ch: Char, count: Int, subsequent: CharReader) extends CharReader {
+  def line: Int = subsequent.line
+
+  def col: Int = subsequent.col
+
+  def more: Boolean = count > 1 || subsequent.more
+
+  def eoi: Boolean = !more
+
+  def next: CharReader =
+    if (count > 1) new SpecialCharReader(ch, count - 1, subsequent)
+    else subsequent
+
+  def raw: CharReader = next
+}
+
+object LazyListCharReader {
+
+  val EOI = '\u001A'
+  val INDENT = '\uE000'
+  val DEDENT = '\uE001'
 
   @scala.annotation.tailrec
   private def linelevel(r: CharReader, count: Int = 0): Option[Int] = // not implemented as an instance method because it should be tail recursive
@@ -32,19 +67,23 @@ object CharReader {
 
 }
 
-class CharReader private (val list: LazyList[Char],
-                          val line: Int,
-                          val col: Int,
-                          val tabs: Int,
-                          val _prev: Char,
-                          _start: CharReader,
-                          val indentation: Boolean,
-                          indent: Int,
-                          level: Int) {
-  import CharReader.{EOI, INDENT, DEDENT, linelevel}
+class LazyListCharReader private (val list: LazyList[Char],
+                                  val line: Int,
+                                  val col: Int,
+                                  val tabs: Int,
+                                  val _prev: Char,
+                                  _start: CharReader,
+                                  val indentation: Boolean,
+                                  indent: Int,
+                                  level: Int)
+    extends CharReader {
+  import LazyListCharReader._
 
-  def this(it: Iterator[Char], tabs: Int = 4, indentation: Boolean = false) =
+  def this(it: Iterator[Char], tabs: Int, indentation: Boolean) =
     this(it to LazyList, 1, 1, tabs, 0, null, indentation, 0, 0)
+
+  def this(list: LazyList[Char], tabs: Int, indentation: Boolean) =
+    this(list, 1, 1, tabs, 0, null, indentation, 0, 0)
 
   private val start = if (_start eq null) this else _start
 
@@ -56,6 +95,9 @@ class CharReader private (val list: LazyList[Char],
 
   def ch: Char = if (eoi) EOI else list.head
 
+  private def newline(newindent: Int, newlevel: Int) =
+    new LazyListCharReader(list.tail, line + 1, 1, tabs, ch, null, indentation, newindent, newlevel)
+
   lazy val next: CharReader =
     if (indentation && ch == '\n')
       linelevel(this) match {
@@ -65,9 +107,9 @@ class CharReader private (val list: LazyList[Char],
             error(s"expected next indentation level to be ${level + indent} spaces")
 
           if (l > level)
-            new CharReader(list.tail, line + 1, 1, tabs, INDENT, null, indentation, if (indent == 0) l else indent, l)
+            new SpecialCharReader(INDENT, 1, newline(if (indent == 0) l else indent, l))
           else if (l < level)
-            new CharReader(list.tail, line + 1, 1, tabs, DEDENT, null, indentation, if (l == 0) 0 else indent, l)
+            new SpecialCharReader(DEDENT, (level - l) / indent, newline(if (l == 0) 0 else indent, l))
           else
             raw
       } else
@@ -77,13 +119,19 @@ class CharReader private (val list: LazyList[Char],
     if (eoi)
       eoiError
     else if (ch == '\t')
-      new CharReader(list.tail, line, col + (tabs - (col - 1) % tabs), tabs, ch, start, indentation, indent, level)
+      new LazyListCharReader(list.tail,
+                             line,
+                             col + (tabs - (col - 1) % tabs),
+                             tabs,
+                             ch,
+                             start,
+                             indentation,
+                             indent,
+                             level)
     else if (ch == '\n')
-      new CharReader(list.tail, line + 1, 1, tabs, ch, null, indentation, indent, level)
-    else if (ch == INDENT)
-      new CharReader(list, line, col, tabs, ch, start, indentation, indent, level)
+      newline(indent, level)
     else
-      new CharReader(list.tail, line, col + 1, tabs, ch, start, indentation, indent, level)
+      new LazyListCharReader(list.tail, line, col + 1, tabs, ch, start, indentation, indent, level)
 
   lazy val prev: Char =
     if (soi)
