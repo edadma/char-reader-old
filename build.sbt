@@ -1,4 +1,4 @@
-name := "_"
+name := "char-reader"
 
 version := "0.1"
 
