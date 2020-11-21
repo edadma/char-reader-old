@@ -39,7 +39,9 @@ abstract class CharReader {
 
   def next: CharReader
 
-  def raw: CharReader
+  def nextIgnoreIndentation: CharReader
+
+  def limitUntilDedent(): Unit
 
   def ch: Char
 
@@ -58,20 +60,35 @@ abstract class CharReader {
   protected[char_reader] final def linelevel(indentation: Option[(Option[String], Option[String])],
                                              count: Int = 0): Either[CharReader, (Int, CharReader)] =
     if (none || ch == '\n')
-      Left(raw)
+      Left(nextIgnoreIndentation)
     else if (indentation.isDefined && indentation.get._1.isDefined && string(indentation.get._1.get))
       Left(skipLine)
-    else if (ch == ' ') raw.linelevel(indentation, count + 1)
+    else if (ch == ' ') nextIgnoreIndentation.linelevel(indentation, count + 1)
     else Right((count, this))
 
-  protected[char_reader] def newline(newindent: Int, newlevel: Int): LazyListCharReader = {
-    val (list, tabs, indentation) =
+  protected[char_reader] def newline(newindent: Int, newlevel: Int, keepStart: Boolean = false): LazyListCharReader = {
+    val (newlist, newcol, newtabs, newstart, newindentation, newlimitUntilDedent) =
       this match {
-        case l: LazyListCharReader => (l.list, l.tabs, l.indentation)
-        case _                     => (LazyList.empty[Char], 0, None)
+        case l: LazyListCharReader =>
+          (l.list,
+           if (keepStart) l.col else 1,
+           l.tabs,
+           if (keepStart) l.start else null,
+           l.indentation,
+           l._limitUntilDedent)
+        case _ => (LazyList.empty[Char], 1, 0, null, None, false)
       }
 
-    new LazyListCharReader(list, line + 1, 1, tabs, ch, null, indentation, newindent, newlevel)
+    new LazyListCharReader(newlist,
+                           line + 1,
+                           newcol,
+                           newtabs,
+                           ch,
+                           newstart,
+                           newindentation,
+                           newindent,
+                           newlevel,
+                           newlimitUntilDedent)
   }
 
   def longErrorText(msg: String): String
@@ -98,7 +115,9 @@ class SpecialCharReader(val ch: Char, count: Int, subsequent: CharReader) extend
     if (count > 1) new SpecialCharReader(ch, count - 1, subsequent)
     else subsequent
 
-  def raw: CharReader = next
+  def nextIgnoreIndentation: CharReader = next
+
+  def limitUntilDedent(): Unit = {}
 
   def longErrorText(msg: String): String = toString
 }
@@ -111,17 +130,18 @@ class LazyListCharReader private[char_reader] (val list: LazyList[Char],
                                                _start: CharReader,
                                                val indentation: Option[(Option[String], Option[String])],
                                                indent: Int,
-                                               level: Int)
+                                               level: Int,
+                                               var _limitUntilDedent: Boolean)
     extends CharReader {
   import CharReader._
 
   def this(it: Iterator[Char], tabs: Int, indentation: Option[(Option[String], Option[String])]) =
-    this(it to LazyList, 1, 1, tabs, 0, null, indentation, 0, 0)
+    this(it to LazyList, 1, 1, tabs, 0, null, indentation, 0, 0, false)
 
   def this(list: LazyList[Char], tabs: Int, indentation: Option[(Option[String], Option[String])]) =
-    this(list, 1, 1, tabs, 0, null, indentation, 0, 0)
+    this(list, 1, 1, tabs, 0, null, indentation, 0, 0, false)
 
-  private val start = if (_start eq null) this else _start
+  private[char_reader] val start = if (_start eq null) this else _start
 
   def soi: Boolean = line == 1 && col == 1
 
@@ -130,27 +150,29 @@ class LazyListCharReader private[char_reader] (val list: LazyList[Char],
   def ch: Char = if (none) EOI else list.head
 
   lazy val next: CharReader =
-    if (indentation.nonEmpty && ch == '\n' && raw.some)
-      raw.linelevel(indentation) match {
+    if (indentation.nonEmpty && ch == '\n' && nextIgnoreIndentation.some)
+      nextIgnoreIndentation.linelevel(indentation) match {
         case Left(r) => r
         case Right((l, s)) =>
           if (level != 0 && l % indent != 0)
             error(s"expected next indentation level to be ${level + indent} spaces")
 
           if (l > level)
-            new SpecialCharReader(INDENT, 1, s.newline(if (indent == 0) l else indent, l)) // todo: causes error line to exclude indent spaces
+            new SpecialCharReader(INDENT, 1, s.newline(if (indent == 0) l else indent, l, keepStart = true))
           else if (l < level)
-            new SpecialCharReader(DEDENT, (level - l) / indent, s.newline(if (l == 0) 0 else indent, l))
+            new SpecialCharReader(DEDENT,
+                                  (level - l) / indent,
+                                  s.newline(if (l == 0) 0 else indent, l, keepStart = true))
           else
             s
       } else
-      raw
+      nextIgnoreIndentation
 
-  lazy val raw: CharReader =
+  lazy val nextIgnoreIndentation: CharReader =
     if (none)
       eoiError
     else if (list.tail.isEmpty && level > 0)
-      new SpecialCharReader(DEDENT, level / indent, raw.newline(0, 0))
+      new SpecialCharReader(DEDENT, level / indent, nextIgnoreIndentation.newline(0, 0))
     else if (ch == '\t')
       new LazyListCharReader(list.tail,
                              line,
@@ -160,11 +182,15 @@ class LazyListCharReader private[char_reader] (val list: LazyList[Char],
                              start,
                              indentation,
                              indent,
-                             level)
+                             level,
+                             _limitUntilDedent)
     else if (ch == '\n')
-      new LazyListCharReader(list.tail, line, col, tabs, ch, start, indentation, indent, level).newline(indent, level)
+      new LazyListCharReader(list.tail, line, col, tabs, ch, start, indentation, indent, level, _limitUntilDedent)
+        .newline(indent, level)
     else
-      new LazyListCharReader(list.tail, line, col + 1, tabs, ch, start, indentation, indent, level)
+      new LazyListCharReader(list.tail, line, col + 1, tabs, ch, start, indentation, indent, level, _limitUntilDedent)
+
+  def limitUntilDedent(): Unit = _limitUntilDedent = true
 
   lazy val prev: Char =
     if (soi)
