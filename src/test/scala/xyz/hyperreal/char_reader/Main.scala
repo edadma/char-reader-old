@@ -6,9 +6,7 @@ object Main extends App {
 
   val s =
     """|1
-       |
-       | 3
-       |4
+       | 2
        |""".stripMargin
 
   println(indent(s))
