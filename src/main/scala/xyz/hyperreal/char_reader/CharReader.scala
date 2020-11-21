@@ -37,6 +37,8 @@ abstract class CharReader {
 
   def none: Boolean = !some
 
+  protected[char_reader] def noneSimple: Boolean
+
   def next: CharReader
 
   def nextIgnoreIndentation: CharReader
@@ -61,7 +63,9 @@ abstract class CharReader {
   @scala.annotation.tailrec
   protected[char_reader] final def linelevel(indentation: Option[(Option[String], Option[String])],
                                              count: Int = 0): Either[CharReader, (Int, CharReader)] =
-    if (none || ch == '\n')
+    if (noneSimple)
+      Left(this)
+    else if (ch == '\n')
       Left(nextIgnoreIndentation)
     else if (indentation.isDefined && indentation.get._1.isDefined && string(indentation.get._1.get))
       Left(skipLine)
@@ -113,6 +117,8 @@ class SpecialCharReader(val ch: Char, count: Int, subsequent: CharReader) extend
 
   val some: Boolean = true
 
+  def noneSimple: Boolean = subsequent.none
+
   def next: CharReader =
     if (count > 1) new SpecialCharReader(ch, count - 1, subsequent)
     else subsequent
@@ -151,6 +157,8 @@ class LazyListCharReader private[char_reader] (val list: LazyList[Char],
 
   def some: Boolean = list.nonEmpty
 
+  def noneSimple: Boolean = none
+
   def ch: Char = if (none) EOI else list.head
 
   lazy val next: CharReader =
@@ -176,7 +184,7 @@ class LazyListCharReader private[char_reader] (val list: LazyList[Char],
     if (none)
       eoiError
     else if (list.tail.isEmpty && level > 0)
-      new SpecialCharReader(DEDENT, level / indent, nextIgnoreIndentation.newline(0, 0))
+      new SpecialCharReader(DEDENT, level / indent, nextSimple.newline(0, 0))
     else if (ch == '\t')
       new LazyListCharReader(list.tail,
                              line,
