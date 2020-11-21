@@ -41,6 +41,8 @@ abstract class CharReader {
 
   def nextIgnoreIndentation: CharReader
 
+  def nextSimple: CharReader
+
   def limitUntilDedent(): Unit
 
   def ch: Char
@@ -117,6 +119,8 @@ class SpecialCharReader(val ch: Char, count: Int, subsequent: CharReader) extend
 
   def nextIgnoreIndentation: CharReader = next
 
+  def nextSimple: CharReader = next
+
   def limitUntilDedent(): Unit = {}
 
   def longErrorText(msg: String): String = toString
@@ -185,10 +189,13 @@ class LazyListCharReader private[char_reader] (val list: LazyList[Char],
                              level,
                              _limitUntilDedent)
     else if (ch == '\n')
-      new LazyListCharReader(list.tail, line, col, tabs, ch, start, indentation, indent, level, _limitUntilDedent)
+      nextSimple
         .newline(indent, level)
     else
       new LazyListCharReader(list.tail, line, col + 1, tabs, ch, start, indentation, indent, level, _limitUntilDedent)
+
+  def nextSimple =
+    new LazyListCharReader(list.tail, line, col, tabs, ch, start, indentation, indent, level, _limitUntilDedent)
 
   def limitUntilDedent(): Unit = _limitUntilDedent = true
 
