@@ -10,17 +10,18 @@ object CharReader {
   val INDENT = '\uE000'
   val DEDENT = '\uE001'
 
-  def fromString(s: String, tabs: Int = 4, indentation: Boolean = false) =
+  def fromString(s: String, tabs: Int = 4, indentation: Option[(Option[String], Option[String])] = None) =
     new LazyListCharReader(s.iterator, tabs, indentation)
 
-  def fromInputStream(s: InputStream, tabs: Int = 4, indentation: Boolean = false)(
+  def fromInputStream(s: InputStream, tabs: Int = 4, indentation: Option[(Option[String], Option[String])] = None)(
       implicit codec: io.Codec): CharReader =
     fromSource(io.Source.fromInputStream(s)(codec), tabs, indentation)
 
-  def fromSource(s: io.Source, tabs: Int = 4, indentation: Boolean = false) =
+  def fromSource(s: io.Source, tabs: Int = 4, indentation: Option[(Option[String], Option[String])] = None) =
     new LazyListCharReader(s, tabs, indentation)
 
-  def fromFile(file: String, tabs: Int = 4, indentation: Boolean = false)(implicit codec: io.Codec): CharReader =
+  def fromFile(file: String, tabs: Int = 4, indentation: Option[(Option[String], Option[String])] = None)(
+      implicit codec: io.Codec): CharReader =
     fromInputStream(new FileInputStream(file), tabs, indentation)
 
 }
@@ -84,17 +85,17 @@ class LazyListCharReader private (val list: LazyList[Char],
                                   val tabs: Int,
                                   val _prev: Char,
                                   _start: CharReader,
-                                  val indentation: Boolean,
+                                  val indentation: Option[(Option[String], Option[String])],
                                   indent: Int,
                                   level: Int)
     extends CharReader {
   import CharReader._
   import LazyListCharReader._
 
-  def this(it: Iterator[Char], tabs: Int, indentation: Boolean) =
+  def this(it: Iterator[Char], tabs: Int, indentation: Option[(Option[String], Option[String])]) =
     this(it to LazyList, 1, 1, tabs, 0, null, indentation, 0, 0)
 
-  def this(list: LazyList[Char], tabs: Int, indentation: Boolean) =
+  def this(list: LazyList[Char], tabs: Int, indentation: Option[(Option[String], Option[String])]) =
     this(list, 1, 1, tabs, 0, null, indentation, 0, 0)
 
   private val start = if (_start eq null) this else _start
@@ -117,7 +118,7 @@ class LazyListCharReader private (val list: LazyList[Char],
                            newlevel)
 
   lazy val next: CharReader =
-    if (indentation && ch == '\n' && raw.some)
+    if (indentation.nonEmpty && ch == '\n' && raw.some)
       linelevel(raw) match {
         case None => raw
         case Some(l) =>
