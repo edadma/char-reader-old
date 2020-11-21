@@ -2,11 +2,13 @@ package xyz.hyperreal.char_reader
 
 import java.io.{FileInputStream, InputStream}
 
-import xyz.hyperreal.char_reader.LazyListCharReader.{DEDENT, INDENT}
-
 import scala.collection.mutable.ListBuffer
 
 object CharReader {
+
+  val EOI = '\u001A'
+  val INDENT = '\uE000'
+  val DEDENT = '\uE001'
 
   def fromString(s: String, tabs: Int = 4, indentation: Boolean = false) =
     new LazyListCharReader(s.iterator, tabs, indentation)
@@ -24,13 +26,15 @@ object CharReader {
 }
 
 abstract class CharReader {
+  import CharReader.{INDENT, DEDENT}
+
   def line: Int
 
   def col: Int
 
-  def more: Boolean
+  def some: Boolean
 
-  def eoi: Boolean
+  def none: Boolean = !some
 
   def next: CharReader
 
@@ -54,7 +58,7 @@ class SpecialCharReader(val ch: Char, count: Int, subsequent: CharReader) extend
 
   def col: Int = subsequent.col
 
-  def more: Boolean = count > 1 || subsequent.more
+  val some: Boolean = true
 
   def next: CharReader =
     if (count > 1) new SpecialCharReader(ch, count - 1, subsequent)
@@ -66,14 +70,10 @@ class SpecialCharReader(val ch: Char, count: Int, subsequent: CharReader) extend
 
 object LazyListCharReader {
 
-  val EOI = '\u001A'
-  val INDENT = '\uE000'
-  val DEDENT = '\uE001'
-
   @scala.annotation.tailrec
   private def linelevel(r: CharReader, count: Int = 0): Option[Int] = // not implemented as an instance method because it should be tail recursive
-    if (r.more && r.raw.ch == ' ') linelevel(r.raw, count + 1)
-    else if (r.ch == '\n' || r.eoi) None
+    if (r.none || r.ch == '\n') None
+    else if (r.ch == ' ') linelevel(r.raw, count + 1)
     else Some(count)
 
 }
@@ -88,6 +88,7 @@ class LazyListCharReader private (val list: LazyList[Char],
                                   indent: Int,
                                   level: Int)
     extends CharReader {
+  import CharReader._
   import LazyListCharReader._
 
   def this(it: Iterator[Char], tabs: Int, indentation: Boolean) =
@@ -100,9 +101,9 @@ class LazyListCharReader private (val list: LazyList[Char],
 
   def soi: Boolean = line == 1 && col == 1
 
-  def more: Boolean = list.tail.nonEmpty || level > 0
+  def some: Boolean = list.nonEmpty
 
-  def ch: Char = if (eoi) EOI else list.head
+  def ch: Char = if (none) EOI else list.head
 
   private def newline(newindent: Int, newlevel: Int) =
     new LazyListCharReader(if (list.isEmpty) list else list.tail,
@@ -116,7 +117,7 @@ class LazyListCharReader private (val list: LazyList[Char],
                            newlevel)
 
   lazy val next: CharReader =
-    if (indentation && ch == '\n' && more)
+    if (indentation && ch == '\n' && raw.some)
       linelevel(raw) match {
         case None => raw
         case Some(l) =>
@@ -133,9 +134,9 @@ class LazyListCharReader private (val list: LazyList[Char],
       raw
 
   lazy val raw: CharReader =
-    if (eoi)
+    if (none)
       eoiError
-    else if (list.tail.isEmpty)
+    else if (list.tail.isEmpty && level > 0)
       new SpecialCharReader(DEDENT, level / indent, newline(0, 0))
     else if (ch == '\t')
       new LazyListCharReader(list.tail,
@@ -178,7 +179,7 @@ class LazyListCharReader private (val list: LazyList[Char],
     val buf = new StringBuilder
     var r: CharReader = this.start
 
-    while (r.more && r.ch != '\n') {
+    while (r.some && r.ch != '\n') {
       if (r.ch != INDENT && r.ch != DEDENT)
         buf += r.ch
 
@@ -192,7 +193,7 @@ class LazyListCharReader private (val list: LazyList[Char],
     val buf = new ListBuffer[CharReader]
     var r: CharReader = this
 
-    while (r.more) {
+    while (r.some) {
       buf += r
       r = r.next
     }
