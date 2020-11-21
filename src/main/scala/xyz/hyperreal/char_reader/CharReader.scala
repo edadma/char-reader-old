@@ -72,8 +72,19 @@ abstract class CharReader {
     else if (ch == ' ') nextIgnoreIndentation.linelevel(indentation, count + 1)
     else Right((count, this))
 
+  protected[char_reader] def changeLevel(newindent: Int, newlevel: Int): LazyListCharReader = {
+    val (list, tabs, start, indentation, _limitUntilDedent) =
+      this match {
+        case l: LazyListCharReader =>
+          (l.list, l.tabs, l.start, l.indentation, l._limitUntilDedent)
+        case _ => (LazyList.empty[Char], 0, null, None, false)
+      }
+
+    new LazyListCharReader(list, line, col, tabs, ch, start, indentation, newindent, newlevel, _limitUntilDedent)
+  }
+
   protected[char_reader] def newline(newindent: Int, newlevel: Int, keepStart: Boolean = false): LazyListCharReader = {
-    val (newlist, newcol, newtabs, newstart, newindentation, newlimitUntilDedent) =
+    val (list, newcol, tabs, start, indentation, _limitUntilDedent) =
       this match {
         case l: LazyListCharReader =>
           (l.list,
@@ -85,16 +96,7 @@ abstract class CharReader {
         case _ => (LazyList.empty[Char], 1, 0, null, None, false)
       }
 
-    new LazyListCharReader(newlist,
-                           line + 1,
-                           newcol,
-                           newtabs,
-                           ch,
-                           newstart,
-                           newindentation,
-                           newindent,
-                           newlevel,
-                           newlimitUntilDedent)
+    new LazyListCharReader(list, line + 1, newcol, tabs, ch, start, indentation, newindent, newlevel, _limitUntilDedent)
   }
 
   def longErrorText(msg: String): String
@@ -165,18 +167,18 @@ class LazyListCharReader private[char_reader] (val list: LazyList[Char],
     if (indentation.nonEmpty && ch == '\n' && nextIgnoreIndentation.some)
       nextIgnoreIndentation.linelevel(indentation) match {
         case Left(r) => r
-        case Right((l, s)) =>
-          if (level != 0 && l % indent != 0)
+        case Right((newlevel, r)) =>
+          if (level != 0 && newlevel % indent != 0)
             error(s"expected next indentation level to be ${level + indent} spaces")
 
-          if (l > level)
-            new SpecialCharReader(INDENT, 1, s.newline(if (indent == 0) l else indent, l, keepStart = true))
-          else if (l < level)
+          if (newlevel > level)
+            new SpecialCharReader(INDENT, 1, r.changeLevel(if (indent == 0) newlevel else indent, newlevel)) //newline(if (indent == 0) l else indent, l, keepStart = true))
+          else if (newlevel < level)
             new SpecialCharReader(DEDENT,
-                                  (level - l) / indent,
-                                  s.newline(if (l == 0) 0 else indent, l, keepStart = true))
+                                  (level - newlevel) / indent,
+                                  r.changeLevel(if (newlevel == 0) 0 else indent, newlevel))
           else
-            s
+            r
       } else
       nextIgnoreIndentation
 
