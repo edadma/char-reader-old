@@ -43,6 +43,21 @@ abstract class CharReader {
 
   def ch: Char
 
+  def string(s: String, i: Int = 0): Boolean =
+    if (i < s.length)
+      if (none || ch != s(i)) false
+      else next.string(s, i + 1)
+    else
+      true
+
+  @scala.annotation.tailrec
+  protected[char_reader] final def linelevel(indentation: Option[(Option[String], Option[String])],
+                                             count: Int = 0): Either[CharReader, Int] =
+    if (none || ch == '\n' || indentation.isDefined && indentation.get._1.isDefined && string(indentation.get._1.get))
+      Left(this)
+    else if (ch == ' ') raw.linelevel(indentation, count + 1)
+    else Right(count)
+
   override def toString =
     s"<$line, $col, ${if (ch >= ' ' && ch <= '~') ch.toString
     else
@@ -69,16 +84,6 @@ class SpecialCharReader(val ch: Char, count: Int, subsequent: CharReader) extend
 
 }
 
-object LazyListCharReader {
-
-  @scala.annotation.tailrec
-  private def linelevel(r: CharReader, count: Int = 0): Option[Int] = // not implemented as an instance method because it should be tail recursive
-    if (r.none || r.ch == '\n') None
-    else if (r.ch == ' ') linelevel(r.raw, count + 1)
-    else Some(count)
-
-}
-
 class LazyListCharReader private (val list: LazyList[Char],
                                   val line: Int,
                                   val col: Int,
@@ -90,7 +95,6 @@ class LazyListCharReader private (val list: LazyList[Char],
                                   level: Int)
     extends CharReader {
   import CharReader._
-  import LazyListCharReader._
 
   def this(it: Iterator[Char], tabs: Int, indentation: Option[(Option[String], Option[String])]) =
     this(it to LazyList, 1, 1, tabs, 0, null, indentation, 0, 0)
@@ -119,9 +123,9 @@ class LazyListCharReader private (val list: LazyList[Char],
 
   lazy val next: CharReader =
     if (indentation.nonEmpty && ch == '\n' && raw.some)
-      linelevel(raw) match {
-        case None => raw
-        case Some(l) =>
+      raw.linelevel(indentation) match {
+        case Left(r) => r
+        case Right(l) =>
           if (level != 0 && l % indent != 0)
             error(s"expected next indentation level to be ${level + indent} spaces")
 
