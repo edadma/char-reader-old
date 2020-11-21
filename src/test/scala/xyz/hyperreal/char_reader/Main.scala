@@ -4,7 +4,7 @@ object Main extends App {
 
   val s =
     """|1
-       | #a
+       | #asdf
        |2
        |""".stripMargin
   val l = CharReader.fromString(s, indentation = Some((Some("#"), None))).toList

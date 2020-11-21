@@ -50,11 +50,17 @@ abstract class CharReader {
     else
       true
 
+  def skipLine: CharReader =
+    if (some && ch != '\n') next.skipLine
+    else next
+
   @scala.annotation.tailrec
   protected[char_reader] final def linelevel(indentation: Option[(Option[String], Option[String])],
                                              count: Int = 0): Either[CharReader, Int] =
-    if (none || ch == '\n' || indentation.isDefined && indentation.get._1.isDefined && string(indentation.get._1.get))
-      Left(this)
+    if (none || ch == '\n')
+      Left(next)
+    else if (indentation.isDefined && indentation.get._1.isDefined && string(indentation.get._1.get))
+      Left(skipLine)
     else if (ch == ' ') raw.linelevel(indentation, count + 1)
     else Right(count)
 
