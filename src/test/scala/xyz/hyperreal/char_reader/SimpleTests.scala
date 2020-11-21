@@ -132,4 +132,38 @@ class SimpleTests extends AnyFreeSpec with Matchers {
         |""".trim.replace("!\n", "\n").stripMargin
   }
 
+  "char, nl, space, nl, space" in {
+    indent("1\n \n") shouldBe
+      """
+        |<1> (line 1, column 1):
+        |1
+        |^
+        |
+        |<\n> (line 1, column 2):
+        |1
+        | ^
+        |""".trim.replace("!\n", "\n").stripMargin
+  }
+
+  "char, nl, space, nl, space (noindent)" in {
+    noindent("1\n \n") shouldBe
+      """
+        |<1> (line 1, column 1):
+        |1
+        |^
+        |
+        |<\n> (line 1, column 2):
+        |1
+        | ^
+        |
+        |< > (line 2, column 1):
+        | !
+        |^
+        |
+        |<\n> (line 2, column 2):
+        | !
+        | ^
+        |""".trim.replace("!\n", "\n").stripMargin
+  }
+
 }
