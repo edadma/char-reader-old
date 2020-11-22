@@ -37,6 +37,8 @@ abstract class CharReader {
 
   def none: Boolean = !some
 
+  def soi: Boolean = line == 1 && col == 1
+
   protected[char_reader] def noneSimple: Boolean
 
   def next: CharReader
@@ -162,8 +164,6 @@ class LazyListCharReader private[char_reader] (val list: LazyList[Char],
     this(list, 1, 1, tabs, 0, null, indentation, 0, 0, false)
 
   private[char_reader] val start = if (_start eq null) this else _start
-
-  def soi: Boolean = line == 1 && col == 1
 
   def some: Boolean = list.nonEmpty
 
