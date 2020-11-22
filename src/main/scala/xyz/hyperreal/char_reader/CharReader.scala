@@ -51,6 +51,8 @@ abstract class CharReader {
 
   def ch: Char
 
+  def prev: Char
+
   def substring(end: CharReader): String
 
   def string(s: String, i: Int = 0): Boolean =
@@ -109,6 +111,8 @@ abstract class CharReader {
 
   def longErrorText(msg: String): String
 
+  def error(msg: String): Nothing = sys.error(longErrorText(msg))
+
   override def toString =
     s"<$line, $col, ${if (ch >= ' ' && ch <= '~') ch.toString
     else
@@ -124,6 +128,8 @@ class SpecialCharReader(val ch: Char, count: Int, subsequent: CharReader) extend
   def line: Int = subsequent.line
 
   def col: Int = subsequent.col
+
+  def prev: Char = sys.error("can't call prev() method on a SpecialCharReader")
 
   val some: Boolean = true
 
@@ -284,8 +290,6 @@ class LazyListCharReader private[char_reader] (val list: LazyList[Char],
 
     buf.toList
   }
-
-  def error(msg: String): Nothing = sys.error(longErrorText(msg))
 
   def eoiError: Nothing = error("end of input")
 
