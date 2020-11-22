@@ -6,10 +6,12 @@ object Main extends App {
 
   val s =
     """|1
-       | 2
-       | #asdf
-       | 3
+       | a
+       |  b
+       | c
+       |2
+       | d
        |""".stripMargin
-  println(indent(s))
+  println(text(s))
 
 }
