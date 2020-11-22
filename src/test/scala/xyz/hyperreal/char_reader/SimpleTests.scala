@@ -142,6 +142,10 @@ class SimpleTests extends AnyFreeSpec with Matchers {
         |<\n> (line 1, column 2):
         |1
         | ^
+        |
+        |<\n> (line 2, column 2):
+        | !
+        | ^
         |""".trim.replace("!\n", "\n").stripMargin
   }
 

@@ -207,4 +207,40 @@ class BasicIndentationTests extends AnyFreeSpec with Matchers {
        """.trim.stripMargin
   }
 
+  "double line indent, then eoi" in {
+    indent(
+      """|1
+         | 2
+         | 3
+         |""".stripMargin
+    ) shouldBe
+      """|<1> (line 1, column 1):
+         |1
+         |^
+         |
+         |<\n> (line 1, column 2):
+         |1
+         | ^
+         |
+         |<2, 2, INDENT>
+         |<2> (line 2, column 2):
+         | 2
+         | ^
+         |
+         |<\n> (line 2, column 3):
+         | 2
+         |  ^
+         |
+         |<3> (line 3, column 2):
+         | 3
+         | ^
+         |
+         |<\n> (line 3, column 3):
+         | 3
+         |  ^
+         |
+         |<4, 1, DEDENT>
+       """.trim.stripMargin
+  }
+
 }

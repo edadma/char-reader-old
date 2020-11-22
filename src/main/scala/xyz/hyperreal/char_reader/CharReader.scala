@@ -58,18 +58,18 @@ abstract class CharReader {
 
   def skipLine: CharReader =
     if (some && ch != '\n') next.skipLine
-    else next
+    else this //todo: was 'else next'
 
   @scala.annotation.tailrec
-  protected[char_reader] final def linelevel(indentation: Option[(Option[String], Option[String])],
+  protected[char_reader] final def lineLevel(indentation: Option[(Option[String], Option[String])],
                                              count: Int = 0): Either[CharReader, (Int, CharReader)] =
     if (noneSimple)
       Left(this)
     else if (ch == '\n')
-      Left(nextIgnoreIndentation)
+      Left(this) //nextIgnoreIndentation)
     else if (indentation.isDefined && indentation.get._1.isDefined && string(indentation.get._1.get))
       Left(skipLine)
-    else if (ch == ' ') nextIgnoreIndentation.linelevel(indentation, count + 1)
+    else if (ch == ' ') nextIgnoreIndentation.lineLevel(indentation, count + 1)
     else Right((count, this))
 
   protected[char_reader] def changeLevel(newindent: Int, newlevel: Int): LazyListCharReader = {
@@ -165,7 +165,7 @@ class LazyListCharReader private[char_reader] (val list: LazyList[Char],
 
   lazy val next: CharReader =
     if (indentation.nonEmpty && ch == '\n' && nextIgnoreIndentation.some)
-      nextIgnoreIndentation.linelevel(indentation) match {
+      nextIgnoreIndentation.lineLevel(indentation) match {
         case Left(r) => r
         case Right((newlevel, r)) =>
           if (level != 0 && newlevel % indent != 0)
