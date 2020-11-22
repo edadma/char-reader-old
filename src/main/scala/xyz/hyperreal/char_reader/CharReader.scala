@@ -49,6 +49,8 @@ abstract class CharReader {
 
   def ch: Char
 
+  def substring(end: CharReader): String
+
   def string(s: String, i: Int = 0): Boolean =
     if (i < s.length)
       if (none || ch != s(i)) false
@@ -132,6 +134,8 @@ class SpecialCharReader(val ch: Char, count: Int, subsequent: CharReader) extend
   def nextIgnoreIndentation: CharReader = next
 
   def nextSimple: CharReader = next
+
+  def substring(end: CharReader): String = sys.error("can't call substring() method on a SpecialCharReader")
 
   def textUntilDedent(): Unit = subsequent.textUntilDedent()
 
