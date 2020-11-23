@@ -143,7 +143,9 @@ class SpecialCharReader(val ch: Char, count: Int, subsequent: CharReader) extend
 
   def nextSimple: CharReader = next
 
-  def substring(end: CharReader): String = sys.error("can't call substring() method on a SpecialCharReader")
+  def substring(end: CharReader): String =
+    if (this eq end) ""
+    else sys.error("non-empty substring() from a SpecialCharReader not implemented")
 
   def textUntilDedent(): Unit = subsequent.textUntilDedent()
 
