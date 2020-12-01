@@ -10,6 +10,9 @@ object CharReader {
   val INDENT = '\uE000'
   val DEDENT = '\uE001'
 
+  def fromIterator(it: Iterator[Char], tabs: Int = 4, indentation: Option[(Option[String], Option[String])] = None) =
+    new LazyListCharReader(it, tabs, indentation)
+
   def fromString(s: String, tabs: Int = 4, indentation: Option[(Option[String], Option[String])] = None) =
     new LazyListCharReader(s.iterator, tabs, indentation)
 

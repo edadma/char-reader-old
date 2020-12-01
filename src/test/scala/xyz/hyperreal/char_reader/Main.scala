@@ -5,10 +5,9 @@ import Testing._
 object Main extends App {
 
   val s =
-    """||
-       | a
-       |""".stripMargin
+    """|a: as #df
+    """.trim.stripMargin
 
-  println(indent(s))
+  println(text(s))
 
 }
